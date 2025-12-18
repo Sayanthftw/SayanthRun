@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SAYANTH RUN // NEON_JAPAN</title>
+    <style>
+        :root { --neon-red: #ff003c; --bg-black: #050505; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background-color: var(--bg-black); color: var(--neon-red); font-family: 'Courier New', monospace; overflow: hidden; touch-action: manipulation; }
+        #game-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: radial-gradient(circle, #2a0000 0%, #000 100%); }
+        h1 { margin: 0; font-size: clamp(30px, 10vw, 65px); letter-spacing: 10px; text-shadow: 0 0 20px var(--neon-red); }
+        canvas { background: rgba(0, 0, 0, 0.9); border: 5px solid var(--neon-red); box-shadow: 0 0 50px rgba(255, 0, 60, 0.4); max-width: 95%; height: auto; margin-top: 20px; }
+        #audio-unlock { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; cursor: pointer; }
+        .btn { padding: 15px 30px; border: 2px solid var(--neon-red); background: none; color: white; font-size: 20px; cursor: pointer; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div id="audio-unlock">
+    <h1>SAYANTH RUN</h1>
+    <p>HACKER MODE DETECTED</p>
+    <button class="btn">INITIALIZE AUDIO & START</button>
+</div>
+
+<div id="game-wrapper">
+    <h1 id="title">SAYANTH RUN</h1>
+    <canvas id="gameCanvas"></canvas>
+    <p style="color:white; margin-top:10px;">TAP OR SPACEBAR TO JUMP</p>
+</div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const unlockScreen = document.getElementById("audio-unlock");
+    canvas.width = 800;
+    canvas.height = 300;
+
+    // --- SOUND LINKS (FIXED GOOGLE DRIVE LINKS) ---
+    // Note: If Drive blocks these, you may need to use a dedicated host like Discord or GitHub
+    const JUMP_SFX = new Audio("https://docs.google.com/uc?export=download&id=1qO7FhoLsQxYPBUua6WVRJ1Y8hBetfFdc");
+    const LOSE_SFX = new Audio("https://docs.google.com/uc?export=download&id=1U1syknIl1WsSUdBoRTX2z1pIX57IXPpL");
+
+    // Pre-load sounds
+    JUMP_SFX.load();
+    LOSE_SFX.load();
+
+    const dinoImg = new Image();
+    dinoImg.src = "https://media.discordapp.net/attachments/1449447237154246809/1451228508650209441/ogh.png?ex=6945695e&is=694417de&hm=ca5007b3548c71972cde1f66a70905810ab836f08983a994d9570f92bafa6108&=&format=webp&quality=lossless&width=541&height=721";
+
+    let score = 0;
+    let gameSpeed = 7;
+    let isGameOver = false;
+    let gravity = 0.8;
+    let frame = 0;
+    let gameStarted = false;
+
+    const player = { x: 70, y: 200, w: 60, h: 75, dy: 0, jumpForce: 17, grounded: false };
+    const obstacles = [];
+    const snowParticles = [];
+
+    // --- AUDIO UNLOCKER ---
+    unlockScreen.addEventListener("click", () => {
+        // This "wakes up" the audio engine
+        JUMP_SFX.play().then(() => {
+            JUMP_SFX.pause();
+            JUMP_SFX.currentTime = 0;
+        });
+        unlockScreen.style.display = "none";
+        gameStarted = true;
+        animate();
+    });
+
+    function handleInput() {
+        if (!gameStarted) return;
+        if (isGameOver) {
+            resetGame();
+        } else if (player.grounded) {
+            player.dy = -player.jumpForce;
+            player.grounded = false;
+            JUMP_SFX.currentTime = 0;
+            JUMP_SFX.play().catch(e => console.log("Sound Error"));
+        }
+    }
+
+    window.addEventListener("keydown", (e) => { if (e.code === "Space") handleInput(); });
+    window.addEventListener("touchstart", (e) => { handleInput(); e.preventDefault(); }, {passive: false});
+
+    function resetGame() {
+        score = 0; gameSpeed = 7; obstacles.length = 0;
+        isGameOver = false; player.y = 200; player.dy = 0; frame = 0;
+        animate();
+    }
+
+    function animate() {
+        if (isGameOver || !gameStarted) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Snow
+        ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+        if (frame % 4 === 0) snowParticles.push({x: Math.random() * canvas.width, y: -10, size: Math.random() * 3, speed: Math.random() * 2 + 1});
+        snowParticles.forEach((s, i) => {
+            s.y += s.speed;
+            ctx.fillRect(s.x, s.y, s.size, s.size);
+            if (s.y > canvas.height) snowParticles.splice(i, 1);
+        });
+
+        // Player
+        player.dy += gravity;
+        player.y += player.dy;
+        if (player.y + player.h > canvas.height - 15) { player.y = canvas.height - 15 - player.h; player.dy = 0; player.grounded = true; }
+        ctx.drawImage(dinoImg, player.x, player.y, player.w, player.h);
+
+        // Obstacles
+        if (frame % 90 === 0) obstacles.push({ x: canvas.width, w: 25, h: 40 + Math.random() * 40 });
+        obstacles.forEach((obs, i) => {
+            obs.x -= gameSpeed;
+            ctx.fillStyle = "#000";
+            ctx.strokeStyle = "#ff003c";
+            ctx.lineWidth = 2;
+            ctx.fillRect(obs.x, canvas.height - 15 - obs.h, obs.w, obs.h);
+            ctx.strokeRect(obs.x, canvas.height - 15 - obs.h, obs.w, obs.h);
+
+            if (player.x < obs.x + obs.w - 10 && player.x + player.w > obs.x + 10 && player.y + player.h > canvas.height - 15 - obs.h) {
+                isGameOver = true;
+                LOSE_SFX.play().catch(e => console.log("Sound Error"));
+                showGameOver();
+            }
+            if (obs.x + obs.w < 0) { obstacles.splice(i, 1); score++; if (score % 5 === 0) gameSpeed += 0.3; }
+        });
+
+        ctx.fillStyle = "white";
+        ctx.font = "bold 16px Courier New";
+        ctx.fillText(`ENCRYPTION: ${score.toString().padStart(4, '0')}`, 20, 30);
+        frame++;
+        requestAnimationFrame(animate);
+    }
+
+    function showGameOver() {
+        ctx.fillStyle = "rgba(0,0,0,0.85)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "red";
+        ctx.textAlign = "center";
+        ctx.font = "bold 35px Courier New";
+        ctx.fillText("NETWORK CRASHED", canvas.width/2, canvas.height/2 - 10);
+        ctx.fillStyle = "white";
+        ctx.font = "18px Courier New";
+        ctx.fillText("TAP TO REBOOT", canvas.width/2, canvas.height/2 + 40);
+        ctx.textAlign = "left";
+    }
+</script>
+</body>
+</html>
